@@ -1,0 +1,26 @@
+# ============================================================
+# .Renviron.example
+# ------------------------------------------------------------
+# Copy this file to `.Renviron` (no extension prefix change),
+# fill in your real keys, and DO NOT commit .Renviron to git.
+# The .gitignore in this repo excludes .Renviron automatically.
+#
+# After editing .Renviron, restart your R session for changes
+# to take effect. Access in R via Sys.getenv("KEY_NAME").
+# ============================================================
+
+# --- Anthropic API (required for news LLM tone extraction) ---
+# Get from: https://console.anthropic.com/
+ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxxxxxxxx
+
+# --- Reddit API (optional; only if using official API instead of scrape) ---
+# Get from: https://www.reddit.com/prefs/apps
+REDDIT_CLIENT_ID=
+REDDIT_CLIENT_SECRET=
+REDDIT_USER_AGENT=sentiment-study by /u/yourusername
+
+# --- StockTwits (no key needed for public endpoints, kept here for clarity) ---
+# STOCKTWITS_TOKEN=
+
+# --- FRED (optional; if pulling macro controls) ---
+# FRED_API_KEY=

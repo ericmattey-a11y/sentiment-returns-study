@@ -1,0 +1,31 @@
+ticker,bucket,sector,personal_holding,notes
+NVDA,retail_favorite,Technology,TRUE,High retail attention + held in portfolio
+TSLA,retail_favorite,Consumer Discretionary,FALSE,Canonical retail/meme-adjacent
+GME,retail_favorite,Consumer Discretionary,FALSE,Pure meme stock baseline
+AMC,retail_favorite,Communication Services,FALSE,Pure meme stock baseline
+PLTR,retail_favorite,Technology,FALSE,Retail-favorite government/AI play
+AMD,retail_favorite,Technology,FALSE,High retail attention semis
+COIN,retail_favorite,Financials,FALSE,Crypto-adjacent retail name
+HOOD,retail_favorite,Financials,FALSE,Retail brokerage; retail-watched
+SOFI,retail_favorite,Financials,FALSE,Retail fintech favorite
+RIVN,retail_favorite,Consumer Discretionary,FALSE,EV retail name
+AAPL,large_cap_institutional,Technology,TRUE,Large-cap; held in portfolio
+MSFT,large_cap_institutional,Technology,TRUE,Large-cap; held in portfolio
+LLY,large_cap_institutional,Health Care,TRUE,Large-cap pharma; held in portfolio
+JPM,large_cap_institutional,Financials,FALSE,Megabank baseline
+JNJ,large_cap_institutional,Health Care,FALSE,Defensive health care baseline
+PG,large_cap_institutional,Consumer Staples,FALSE,Defensive consumer staples
+KO,large_cap_institutional,Consumer Staples,FALSE,Defensive consumer staples
+WMT,large_cap_institutional,Consumer Staples,FALSE,Large-cap retail
+UNH,large_cap_institutional,Health Care,FALSE,Large-cap managed care
+V,large_cap_institutional,Financials,FALSE,Large-cap payments
+VKTX,mid_attention,Health Care,TRUE,Biotech; mid-attention; held in portfolio
+DKNG,mid_attention,Consumer Discretionary,FALSE,Sports betting; news-sensitive
+RBLX,mid_attention,Communication Services,FALSE,Gaming; mixed retail/inst
+SNAP,mid_attention,Communication Services,FALSE,Social platform; mixed
+AFRM,mid_attention,Financials,FALSE,Buy-now-pay-later; news-sensitive
+CHWY,mid_attention,Consumer Discretionary,FALSE,E-commerce mid-cap
+BYND,mid_attention,Consumer Staples,FALSE,Plant-based; declining attention
+F,mid_attention,Consumer Discretionary,FALSE,Auto; institutional but news-sensitive
+DAL,mid_attention,Industrials,FALSE,Airline; news-sensitive
+U,mid_attention,Technology,FALSE,Unity; gaming software mid-cap

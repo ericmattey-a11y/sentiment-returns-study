@@ -1,0 +1,45 @@
+# ---- Secrets (NEVER commit) ----
+.Renviron
+.env
+*.pem
+*.key
+config.yml
+
+# ---- Data files (kept local, not in git) ----
+data/raw/
+data/processed/
+output/figures/
+output/tables/
+
+# Allow validation tables to be committed (small CSVs documenting quality)
+!data/validation/
+
+# ---- R / RStudio ----
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+.Rapp.history
+
+# ---- macOS / Windows / Linux noise ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Editor ----
+.vscode/
+.idea/
+*.swp
+*~
+
+# ---- Python (if used for any side scripts) ----
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# ---- Logs / temp ----
+*.log
+tmp/
+temp/
