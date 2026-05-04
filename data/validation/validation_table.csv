@@ -1,0 +1,11 @@
+check,status,n_violations,n_total,pct_flagged,details
+No duplicate ticker-date pairs,PASS,0,7440,0,
+No negative or zero prices,PASS,0,7440,0,
+No extreme daily moves (>50%),FAIL,2,7440,0.03,BYND 2025-10-21 146.3%; BYND 2025-10-20 127.6%
+"Sentiment scores in [-1, 1]",PASS,0,7440,0,
+Volume > 0 on trading days,PASS,0,7440,0,
+All 30 tickers present,PASS,0,30,0,
+All 3 buckets present,PASS,0,3,0,
+All dates within 12-month window,PASS,0,7440,0,
+Forward 5-day returns plausible (<200%),FAIL,4,7440,0.05,"BYND, BYND, BYND"
+Consistent trading day count across tickers (±10 days),PASS,0,30,0,median = 248 days
