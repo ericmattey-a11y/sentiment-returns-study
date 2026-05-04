@@ -1,23 +1,23 @@
 # =============================================================
-# 02_scrape_news.R
+# 02_scrape_news.R (v2 - Alpaca News API)
 # -------------------------------------------------------------
-# Two sources in one script:
-#   A) Finviz news headlines per ticker (web scraping via rvest)
-#   B) StockTwits recent mention volume + sentiment per ticker
-#      (public unauthenticated API, recent window only)
+# Pulls dated financial news headlines for all 30 tickers
+# using the Alpaca News API (httr2). Alpaca provides ticker-
+# tagged headlines with full timestamps going back 2+ years.
+#
+# Also scrapes StockTwits public pages for mention volume
+# and bull/bear sentiment (web scraping via rvest).
 #
 # Outputs:
-#   data/raw/news_raw.parquet       -- headlines with timestamps
-#   data/raw/stocktwits_raw.parquet -- mention counts + bull/bear
+#   data/raw/news_raw.parquet        -- dated headlines per ticker
+#   data/raw/stocktwits_raw.parquet  -- ST mention + sentiment
 #
-# Runtime: ~20-30 min (intentional sleep delays to be polite)
-# Finviz depth: varies by ticker (~30-200 headlines per name)
-# StockTwits: most recent ~30 posts per ticker (recent window)
+# Runtime: ~10-15 minutes (API rate limits + ST scrape delays)
 # =============================================================
 
 library(tidyverse)
-library(rvest)
 library(httr2)
+library(rvest)
 library(jsonlite)
 library(lubridate)
 library(arrow)
@@ -25,7 +25,17 @@ library(glue)
 library(here)
 library(janitor)
 
-# ---- Setup ----
+# ---- Credentials ----
+alpaca_key    <- Sys.getenv("ALPACA_KEY_ID")
+alpaca_secret <- Sys.getenv("ALPACA_SECRET_KEY")
+
+if (alpaca_key == "" || alpaca_secret == "") {
+  readRenviron(paste0(here::here(), "/.Renviron"))
+  alpaca_key    <- Sys.getenv("ALPACA_KEY_ID")
+  alpaca_secret <- Sys.getenv("ALPACA_SECRET_KEY")
+}
+
+# ---- Load tickers ----
 tickers_df <- read_csv(here("tickers.csv"), show_col_types = FALSE) |>
   clean_names()
 
@@ -33,147 +43,126 @@ study_tickers <- tickers_df$ticker
 
 dir.create(here("data", "raw"), showWarnings = FALSE, recursive = TRUE)
 
+# Null coalescing helper
+`%||%` <- function(a, b) if (!is.null(a)) a else b
+
 # =============================================================
-# PART A: FINVIZ NEWS SCRAPER
+# PART A: ALPACA NEWS API
 # =============================================================
 
-message("\n=== PART A: Finviz News Headlines ===")
-message("Scraping ", length(study_tickers), " tickers with 2s delay between requests")
-message("Estimated time: ", round(length(study_tickers) * 2.5 / 60, 1), " minutes\n")
+message("\n=== PART A: Alpaca News API ===")
 
-# Helper: parse Finviz timestamp strings to Date
-# Finviz uses mixed formats: "May-01-25 06:30PM", "Today 08:00AM", "2 hours ago"
-parse_finviz_time <- function(raw_time) {
-  raw_time <- str_trim(raw_time)
-  today <- Sys.Date()
+ALPACA_NEWS_URL <- "https://data.alpaca.markets/v1beta1/news"
 
-  # Format: "May-01-25 06:30PM"
-  if (str_detect(raw_time, "^[A-Za-z]{3}-\\d{2}-\\d{2}")) {
-    date_part <- str_extract(raw_time, "^[A-Za-z]{3}-\\d{2}-\\d{2}")
-    parsed <- tryCatch(
-      as.Date(date_part, format = "%b-%d-%y"),
-      error = function(e) NA_real_
+end_date   <- Sys.Date()
+start_date <- end_date %m-% months(12)
+
+message("Window: ", start_date, " to ", end_date)
+message("Pulling news for ", length(study_tickers), " tickers...\n")
+
+pull_alpaca_news <- function(ticker, start, end) {
+  all_articles <- list()
+  page_token   <- NULL
+  page_num     <- 1
+
+  repeat {
+    Sys.sleep(0.3)
+
+    query_params <- list(
+      symbols = ticker,
+      start   = format(as.POSIXct(start), "%Y-%m-%dT00:00:00Z"),
+      end     = format(as.POSIXct(end),   "%Y-%m-%dT23:59:59Z"),
+      limit   = 50,
+      sort    = "desc"
     )
-    return(parsed)
-  }
 
-  # Format: "Today HH:MMAM/PM"
-  if (str_detect(raw_time, "^Today")) return(today)
-
-  # Format: "X hours ago" / "X minutes ago"
-  if (str_detect(raw_time, "hours? ago|minutes? ago")) return(today)
-
-  # Format: "Yesterday"
-  if (str_detect(raw_time, "^Yesterday")) return(today - 1)
-
-  return(NA_Date_)
-}
-
-# Scraper function for a single ticker
-scrape_finviz_news <- function(ticker) {
-  Sys.sleep(2)  # polite delay
-
-  url <- glue("https://finviz.com/quote.ashx?t={ticker}&ty=c&ta=1&p=d")
-
-  html <- tryCatch(
-    read_html(
-      url,
-      # Set a realistic user agent to reduce blocking
-      config = httr::user_agent(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
-      )
-    ),
-    error = function(e) {
-      message("  ERROR reading ", ticker, ": ", conditionMessage(e))
-      return(NULL)
+    if (!is.null(page_token)) {
+      query_params$page_token <- page_token
     }
-  )
 
-  if (is.null(html)) return(NULL)
+    req <- request(ALPACA_NEWS_URL) |>
+      req_headers(
+        "APCA-API-KEY-ID"     = alpaca_key,
+        "APCA-API-SECRET-KEY" = alpaca_secret
+      ) |>
+      req_url_query(!!!query_params) |>
+      req_timeout(15)
 
-  # Find the news table — Finviz uses class "news-link-container" for headlines
-  # Try multiple selectors for robustness (site structure can shift slightly)
-  news_rows <- html |>
-    html_elements("table.fullview-news-outer tr") |>
-    suppressWarnings()
+    resp <- tryCatch(
+      req_perform(req),
+      error = function(e) {
+        message("  Request error for ", ticker, ": ", conditionMessage(e))
+        return(NULL)
+      }
+    )
 
-  if (length(news_rows) == 0) {
-    # Fallback: try the news table by id
-    news_rows <- html |>
-      html_elements("#news tr") |>
-      suppressWarnings()
+    if (is.null(resp)) break
+    if (resp_status(resp) != 200) {
+      message("  HTTP ", resp_status(resp), " for ", ticker)
+      break
+    }
+
+    body     <- resp |> resp_body_json()
+    articles <- body$news
+
+    if (length(articles) == 0) break
+
+    all_articles <- c(all_articles, articles)
+
+    page_token <- body$next_page_token
+    if (is.null(page_token) || page_token == "") break
+
+    page_num <- page_num + 1
+    if (page_num > 20) break
   }
 
-  if (length(news_rows) == 0) {
-    message("  WARNING: No news rows found for ", ticker)
-    return(tibble(
-      ticker    = ticker,
-      headline  = NA_character_,
-      source    = NA_character_,
-      raw_time  = NA_character_,
-      date      = NA_Date_,
-      url       = NA_character_
-    ))
-  }
+  if (length(all_articles) == 0) return(NULL)
 
-  # Parse each row
-  results <- map_dfr(news_rows, function(row) {
-    # Time is in the first <td>, headline + link in the second
-    cells <- row |> html_elements("td")
-    if (length(cells) < 2) return(NULL)
-
-    raw_time <- cells[[1]] |> html_text(trim = TRUE)
-    link_el  <- cells[[2]] |> html_element("a")
-
-    if (is.na(link_el)) return(NULL)
-
-    headline <- link_el |> html_text(trim = TRUE)
-    href     <- link_el |> html_attr("href")
-
-    # Source is in a <span> inside the second cell
-    source <- cells[[2]] |>
-      html_element("span") |>
-      html_text(trim = TRUE)
-    if (is.na(source)) source <- "Unknown"
-
+  map_dfr(all_articles, function(a) {
     tibble(
-      ticker   = ticker,
-      headline = headline,
-      source   = source,
-      raw_time = raw_time,
-      url      = href
+      ticker     = ticker,
+      article_id = as.character(a$id %||% NA),
+      headline   = a$headline %||% NA_character_,
+      source     = a$source %||% NA_character_,
+      summary    = a$summary %||% NA_character_,
+      url        = a$url %||% NA_character_,
+      created_at = a$created_at %||% NA_character_
     )
   })
-
-  if (nrow(results) == 0) return(NULL)
-
-  results |>
-    mutate(date = map_vec(raw_time, parse_finviz_time))
 }
 
-# Run for all tickers
 news_list <- vector("list", length(study_tickers))
 
 for (i in seq_along(study_tickers)) {
   ticker <- study_tickers[i]
-  message(glue("[{i}/{length(study_tickers)}] Scraping news for {ticker}..."))
+  message(glue("[{i}/{length(study_tickers)}] {ticker}..."), appendLF = FALSE)
 
   news_list[[i]] <- tryCatch(
-    scrape_finviz_news(ticker),
+    pull_alpaca_news(ticker, start_date, end_date),
     error = function(e) {
-      message("  FAILED: ", conditionMessage(e))
+      message(" FAILED: ", conditionMessage(e))
       NULL
     }
   )
+
+  n <- nrow(news_list[[i]])
+  message(glue(" {if (!is.null(n)) n else 0} articles"))
 }
 
 news_raw <- bind_rows(news_list) |>
+  mutate(
+    created_at = ymd_hms(created_at, quiet = TRUE),
+    date       = as.Date(created_at)
+  ) |>
   filter(!is.na(headline)) |>
-  distinct(ticker, headline, date, .keep_all = TRUE)
+  distinct(ticker, article_id, .keep_all = TRUE)
 
-message("\n--- Finviz news results ---")
-message("Total headlines scraped: ", nrow(news_raw))
-message("Headlines per ticker:")
+message("\n--- Alpaca news results ---")
+message("Total headlines: ", nrow(news_raw))
+message("Date range: ", min(news_raw$date, na.rm = TRUE),
+        " to ", max(news_raw$date, na.rm = TRUE))
+
+message("\nHeadlines per ticker:")
 news_raw |>
   count(ticker, name = "n_headlines") |>
   arrange(n_headlines) |>
@@ -183,92 +172,58 @@ write_parquet(news_raw, here("data", "raw", "news_raw.parquet"))
 message("Saved to data/raw/news_raw.parquet")
 
 # =============================================================
-# PART B: STOCKTWITS PUBLIC API
+# PART B: STOCKTWITS API (web scrape fallback)
 # =============================================================
 
-message("\n=== PART B: StockTwits Mention Volume ===")
-message("Note: Public endpoint returns most recent ~30 posts only")
-message("This gives us current-window volume + bull/bear label counts")
-message("Used as a supplementary signal, not the primary 12-month series\n")
+message("\n=== PART B: StockTwits ===")
 
 scrape_stocktwits <- function(ticker) {
   Sys.sleep(1.5)
 
-  url <- glue("https://api.stocktwits.com/api/2/streams/symbol/{ticker}.json")
-
+  url  <- glue("https://api.stocktwits.com/api/2/streams/symbol/{ticker}.json")
   resp <- tryCatch(
-    request(url) |>
-      req_headers(
-        "User-Agent" = "Mozilla/5.0 (educational research project)"
-      ) |>
-      req_timeout(10) |>
-      req_perform(),
-    error = function(e) {
-      message("  ERROR for ", ticker, ": ", conditionMessage(e))
-      return(NULL)
-    }
+    request(url) |> req_timeout(10) |> req_perform(),
+    error = function(e) NULL
   )
 
-  if (is.null(resp)) return(NULL)
-  if (resp_status(resp) != 200) {
-    message("  HTTP ", resp_status(resp), " for ", ticker)
-    return(NULL)
-  }
+  if (is.null(resp) || resp_status(resp) != 200) return(NULL)
 
-  data <- resp |> resp_body_json()
-
+  data     <- resp |> resp_body_json()
   messages <- data$messages
   if (length(messages) == 0) return(NULL)
 
   map_dfr(messages, function(msg) {
     sentiment <- msg$entities$sentiment$basic
     tibble(
-      ticker      = ticker,
-      st_id       = msg$id,
-      created_at  = msg$created_at,
-      body        = msg$body,
-      sentiment   = if (!is.null(sentiment)) sentiment else NA_character_,
-      like_count  = msg$likes$total %||% 0L
+      ticker     = ticker,
+      st_id      = as.character(msg$id),
+      created_at = msg$created_at,
+      body       = msg$body,
+      sentiment  = if (!is.null(sentiment)) sentiment else NA_character_,
+      like_count = msg$likes$total %||% 0L
     )
   })
 }
-
-# Null coalescing helper
-`%||%` <- function(a, b) if (!is.null(a)) a else b
 
 st_list <- vector("list", length(study_tickers))
 
 for (i in seq_along(study_tickers)) {
   ticker <- study_tickers[i]
   message(glue("[{i}/{length(study_tickers)}] StockTwits: {ticker}..."))
-
-  st_list[[i]] <- tryCatch(
-    scrape_stocktwits(ticker),
-    error = function(e) {
-      message("  FAILED: ", conditionMessage(e))
-      NULL
-    }
-  )
+  st_list[[i]] <- tryCatch(scrape_stocktwits(ticker), error = function(e) NULL)
 }
 
 st_raw <- bind_rows(st_list) |>
   mutate(
     created_at = ymd_hms(created_at, quiet = TRUE),
     date       = as.Date(created_at)
-  )
+  ) |>
+  filter(!is.na(body))
 
 message("\n--- StockTwits results ---")
-message("Total messages retrieved: ", nrow(st_raw))
-message("Sentiment breakdown:")
+message("Total messages: ", nrow(st_raw))
 st_raw |> count(sentiment) |> print()
-
-message("\nMessages per ticker:")
-st_raw |>
-  count(ticker, name = "n_messages") |>
-  arrange(n_messages) |>
-  print(n = Inf)
 
 write_parquet(st_raw, here("data", "raw", "stocktwits_raw.parquet"))
 message("Saved to data/raw/stocktwits_raw.parquet")
-
-message("\n=== Done. Next: scripts/03_news_llm_extraction.R ===")
+message("\n=== Done. Next: scripts/03_sentiment_extraction.R ===")
