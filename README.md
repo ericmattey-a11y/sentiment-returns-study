@@ -119,8 +119,9 @@ This repo is configured to never commit secrets:
 
 ## Deliverables
 
-- **GitHub repo:** [link TBD]
-- **Tableau Public dashboard:** [link TBD]
+## Deliverables
+- **GitHub repo:** https://github.com/ericmattey-a11y/sentiment-returns-study
+- **Tableau Public dashboard:** https://public.tableau.com/app/profile/eric.mattey/viz/HumanSignalsPredictStockReturns/S6-Portfolio
 - **Recorded technical presentation (YouTube unlisted):** [link TBD]
 
 ## License
