@@ -39,6 +39,7 @@ This project meets the 3-source / 2-method requirement with three distinct acqui
 | 1 | **Yahoo Finance** (via `tidyquant`) | API | Daily OHLCV → returns, abnormal returns vs SPY |
 | 2 | **Alpaca Markets News API** (via `httr2`) | API | 16,693 dated headlines → sentiment scoring |
 | 3 | **StockTwits** (public stream endpoint) | Web scraping | Mention volume + bull/bear sentiment labels |
+
 Source #3 is the project's methodological differentiator: rather than using a pre-built sentiment dictionary, headlines are passed to Claude via the Anthropic API with a structured-output prompt that returns a tone score (-1 to +1), confidence, and primary topic per headline. This is documented in `scripts/03_news_llm_extraction.R`.
 
 ## Time Window
