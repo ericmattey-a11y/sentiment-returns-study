@@ -1,8 +1,7 @@
 # Do Human Signals Predict Stock Returns?
 
 **ISA 401/501 — Data Visualization Final Project**
-**Author:** Eric [Last Name]
-**Team Number:** [TBD]
+**Author:** Eric Mattey
 **Course:** Miami University, Spring 2026
 
 ---
