@@ -2,13 +2,14 @@
 
 **ISA 401/501 — Data Visualization Final Project**
 **Author:** Eric Mattey
+**Team:** Individual Submission
 **Course:** Miami University, Spring 2026
 
 ---
 
 ## Research Question
 
-**Across a 30-stock universe spanning retail-favorite, institutional, and mid-attention names, do social media sentiment (Reddit/StockTwits) and news-tone shifts predict abnormal returns over the next 1–5 trading days — individually, and combined?**
+**Across a 30-stock universe spanning retail-favorite, institutional, and mid-attention names, do social media sentiment through StockTwits and news-tone shifts predict abnormal returns over the next 1–5 trading days — individually, and combined?**
 
 The motivation is practical: if "human elements" — crowd sentiment and narrative tone — carry predictive power for short-term price moves, they belong in a discretionary or systematic trading model. If they don't, the right move is to ignore them and focus on price action and fundamentals. This project produces evidence either way and applies the findings to a personal portfolio as a secondary analysis.
 
@@ -33,9 +34,8 @@ This project meets the 3-source / 2-method requirement with three distinct acqui
 | # | Source | Acquisition Method | Purpose |
 |---|---|---|---|
 | 1 | **Yahoo Finance** (via `tidyquant`) | API | Daily OHLCV → returns, abnormal returns vs SPY |
-| 2 | **Reddit (r/wallstreetbets, r/stocks) / StockTwits** | Web scraping | Mention volume + raw text → sentiment signal |
-| 3 | **Financial news headlines** (Finviz / Benzinga) | Scraping + LLM structured extraction (Anthropic API) | Per-ticker daily news tone score |
-
+| 2 | **Alpaca Markets News API** (via `httr2`) | API | 16,693 dated headlines → sentiment scoring |
+| 3 | **StockTwits** (public stream endpoint) | Web scraping | Mention volume + bull/bear sentiment labels |
 Source #3 is the project's methodological differentiator: rather than using a pre-built sentiment dictionary, headlines are passed to Claude via the Anthropic API with a structured-output prompt that returns a tone score (-1 to +1), confidence, and primary topic per headline. This is documented in `scripts/03_news_llm_extraction.R`.
 
 ## Time Window
@@ -54,8 +54,8 @@ source("scripts/00_setup.R")
 
 # 4. Run pipeline scripts in order
 source("scripts/01_pull_prices.R")          # ~2 min
-source("scripts/02_scrape_social.R")        # ~15 min (rate-limited)
-source("scripts/03_news_llm_extraction.R")  # ~30 min (LLM calls)
+source("scripts/02_scrape_news.R")          # ~15 min (rate-limited)
+source("scripts/03_sentiment_extraction.R") # ~30 sec (local LM dictionary)
 source("scripts/04_clean_merge.R")          # ~1 min
 source("scripts/05_validate.R")             # ~30 sec
 source("scripts/06_features_analysis.R")    # ~2 min
@@ -74,8 +74,8 @@ sentiment-returns-study/
 ├── scripts/
 │   ├── 00_setup.R                     # install/load packages
 │   ├── 01_pull_prices.R               # Yahoo Finance via tidyquant
-│   ├── 02_scrape_social.R             # Reddit/StockTwits scrape
-│   ├── 03_news_llm_extraction.R       # headlines + Claude API tone scoring
+│   ├── 02_scrape_news.R               # Alpaca News API + StockTwits scrape
+│   ├── 03_sentiment_extraction.R      # LM dictionary sentiment scoring
 │   ├── 04_clean_merge.R               # build merged ticker × date panel
 │   ├── 05_validate.R                  # data quality rules + validation table
 │   └── 06_features_analysis.R         # abnormal returns, lag features, stats
@@ -99,7 +99,6 @@ sentiment-returns-study/
 - **Sentiment range** — all sentiment scores in [-1, 1]
 - **Join integrity** — every ticker-date in price data has corresponding sentiment row (NA flagged, not silent)
 - **Volume consistency** — daily volume > 0 for active tickers
-- **News tone confidence** — flag headlines where LLM confidence < 0.5 for review
 
 ## Security
 
@@ -119,10 +118,9 @@ This repo is configured to never commit secrets:
 
 ## Deliverables
 
-## Deliverables
 - **GitHub repo:** https://github.com/ericmattey-a11y/sentiment-returns-study
 - **Tableau Public dashboard:** https://public.tableau.com/app/profile/eric.mattey/viz/HumanSignalsPredictStockReturns/S6-Portfolio
-- **Recorded technical presentation (YouTube unlisted):** [link TBD]
+- **Recorded technical presentation (YouTube unlisted):** https://www.youtube.com/watch?v=WvHBiEp67Kg
 
 ## License
 
